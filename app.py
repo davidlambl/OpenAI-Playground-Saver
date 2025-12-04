@@ -110,6 +110,64 @@ def get_models():
         return jsonify({"error": str(e), "models": []}), 500
 
 
+@app.route("/api/history/<response_id>")
+def get_response_history(response_id: str):
+    """Get conversation history for a response ID."""
+    api_key = request.args.get("api_key", "").strip()
+    
+    if not api_key:
+        return jsonify({"error": "API key is required"}), 400
+    
+    if not response_id:
+        return jsonify({"error": "Response ID is required"}), 400
+    
+    try:
+        client = get_client(api_key)
+        
+        # Get the response itself
+        response = client.responses.retrieve(response_id)
+        
+        # Get input items (conversation history)
+        input_items = client.responses.input_items.list(response_id)
+        
+        # Build conversation history
+        messages = []
+        for item in input_items.data:
+            if item.type == "message":
+                role = item.role if hasattr(item, 'role') else "unknown"
+                content = ""
+                if hasattr(item, 'content') and item.content:
+                    for c in item.content:
+                        if hasattr(c, 'text'):
+                            content += c.text
+                        elif hasattr(c, 'type') and c.type == "input_text":
+                            content += c.text if hasattr(c, 'text') else ""
+                messages.append({
+                    "role": role,
+                    "content": content
+                })
+        
+        # Get the output from the response
+        output_text = ""
+        if hasattr(response, 'output') and response.output:
+            for item in response.output:
+                if item.type == "message":
+                    for c in item.content:
+                        if hasattr(c, 'text'):
+                            output_text += c.text
+        
+        return jsonify({
+            "response_id": response_id,
+            "model": response.model if hasattr(response, 'model') else "unknown",
+            "messages": messages,
+            "output": output_text,
+            "created_at": response.created_at if hasattr(response, 'created_at') else None,
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/send", methods=["POST"])
 def send_message():
     """Send a message and get a response."""

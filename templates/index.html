@@ -733,7 +733,8 @@
         <label>Response ID</label>
         <div class="response-id-row">
           <input type="text" id="responseId" placeholder="resp_0a6e586e566ede67..." autocomplete="off">
-          <button class="btn-browse" id="browseResponses" title="Browse recent responses">📋</button>
+          <button class="btn-browse" id="loadHistory" title="Load conversation history">📜</button>
+          <button class="btn-browse" id="browseResponses" title="Browse saved responses">📋</button>
         </div>
       </div>
       <div class="config-group">
@@ -1130,6 +1131,81 @@
     
     // Fetch models on page load
     fetchModels();
+
+    // Load History button
+    const loadHistoryBtn = document.getElementById('loadHistory');
+    
+    loadHistoryBtn.addEventListener('click', async () => {
+      const apiKey = apiKeyInput.value.trim();
+      const responseId = responseIdInput.value.trim();
+      
+      if (!apiKey) {
+        showToast('Please enter your API key first', 'error');
+        apiKeyInput.focus();
+        return;
+      }
+      
+      if (!responseId) {
+        showToast('Please enter a Response ID first', 'error');
+        responseIdInput.focus();
+        return;
+      }
+      
+      // Hide empty state
+      emptyState.style.display = 'none';
+      
+      // Clear existing messages
+      chatContainer.innerHTML = '';
+      
+      // Show loading
+      const loadingEl = document.createElement('div');
+      loadingEl.className = 'loading';
+      loadingEl.innerHTML = `
+        <div class="loading-dots"><span></span><span></span><span></span></div>
+        <span>Loading conversation history...</span>
+      `;
+      chatContainer.appendChild(loadingEl);
+      
+      try {
+        const res = await fetch(`/api/history/${responseId}?api_key=${encodeURIComponent(apiKey)}`);
+        const data = await res.json();
+        
+        loadingEl.remove();
+        
+        if (data.error) {
+          showToast('Error: ' + data.error, 'error');
+          emptyState.style.display = 'flex';
+          return;
+        }
+        
+        // Render conversation history
+        if (data.messages && data.messages.length > 0) {
+          data.messages.forEach(msg => {
+            addMessage(msg.role, msg.content);
+          });
+        }
+        
+        // Add the assistant's output
+        if (data.output) {
+          addMessage('assistant', data.output, [], responseId);
+        }
+        
+        // Update model selector if we got model info
+        if (data.model) {
+          const option = modelSelect.querySelector(`option[value="${data.model}"]`);
+          if (option) {
+            modelSelect.value = data.model;
+          }
+        }
+        
+        showToast(`Loaded ${data.messages?.length || 0} messages`, 'success');
+        
+      } catch (err) {
+        loadingEl.remove();
+        showToast('Failed to load history: ' + err.message, 'error');
+        emptyState.style.display = 'flex';
+      }
+    });
 
     // Response History (stored in localStorage)
     const HISTORY_KEY = 'playground_saver_history';
