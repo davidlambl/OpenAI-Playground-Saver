@@ -977,6 +977,9 @@
         // Update response ID for next message
         currentResponseId = data.new_response_id;
         responseIdInput.value = data.new_response_id;
+        
+        // Save to history
+        saveToHistory(data.new_response_id, data.model, message || '(image attachment)');
 
         showToast('Response received', 'success');
 
@@ -1054,6 +1057,19 @@
       }, 3000);
     }
 
+    // Save initial response ID when user enters one manually
+    responseIdInput.addEventListener('change', () => {
+      const id = responseIdInput.value.trim();
+      if (id && id.startsWith('resp_')) {
+        // Check if it's already in history
+        const history = getResponseHistory();
+        if (!history.some(h => h.id === id)) {
+          saveToHistory(id, 'unknown', '(imported from dashboard)', true);
+          showToast('Response ID saved to history', 'success');
+        }
+      }
+    });
+
     // Load from URL params
     const params = new URLSearchParams(window.location.search);
     if (params.get('id')) {
@@ -1115,16 +1131,38 @@
     // Fetch models on page load
     fetchModels();
 
+    // Response History (stored in localStorage)
+    const HISTORY_KEY = 'playground_saver_history';
+    
+    function getResponseHistory() {
+      try {
+        return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+      } catch {
+        return [];
+      }
+    }
+    
+    function saveToHistory(responseId, model, preview, isInitial = false) {
+      const history = getResponseHistory();
+      // Remove duplicate if exists
+      const filtered = history.filter(h => h.id !== responseId);
+      // Add to front
+      filtered.unshift({
+        id: responseId,
+        model: model,
+        preview: preview.substring(0, 100),
+        timestamp: Date.now(),
+        isInitial: isInitial
+      });
+      // Keep only last 100
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(filtered.slice(0, 100)));
+    }
+    
     // Browse Responses functionality
     const browseResponsesBtn = document.getElementById('browseResponses');
     
-    browseResponsesBtn.addEventListener('click', async () => {
-      const apiKey = apiKeyInput.value.trim();
-      if (!apiKey) {
-        showToast('Please enter your API key first', 'error');
-        apiKeyInput.focus();
-        return;
-      }
+    browseResponsesBtn.addEventListener('click', () => {
+      const history = getResponseHistory();
       
       // Create and show modal
       const modal = document.createElement('div');
@@ -1132,14 +1170,10 @@
       modal.innerHTML = `
         <div class="modal">
           <div class="modal-header">
-            <h2>📋 Recent Responses</h2>
+            <h2>📋 Response History</h2>
             <button class="modal-close">&times;</button>
           </div>
           <div class="modal-body">
-            <div class="modal-loading">
-              <div class="loading-dots"><span></span><span></span><span></span></div>
-              <p>Loading responses...</p>
-            </div>
           </div>
         </div>
       `;
@@ -1152,58 +1186,62 @@
         if (e.target === modal) closeModal();
       });
       
-      // Fetch responses
-      try {
-        const res = await fetch('/api/responses?api_key=' + encodeURIComponent(apiKey) + '&limit=50');
-        const data = await res.json();
+      const modalBody = modal.querySelector('.modal-body');
+      
+      if (history.length === 0) {
+        modalBody.innerHTML = `
+          <div class="modal-empty">
+            <p>No response history yet.</p>
+            <p style="font-size: 0.85rem; margin-top: 1rem; color: var(--text-muted);">
+              Paste a Response ID from your <a href="https://platform.openai.com/logs" target="_blank" style="color: var(--accent);">OpenAI Logs</a> to start a conversation.<br><br>
+              Your history will be saved here as you chat.
+            </p>
+          </div>
+        `;
+        return;
+      }
+      
+      // Render response list
+      modalBody.innerHTML = `
+        <div class="response-list"></div>
+        <button class="btn" style="margin-top: 1rem; width: 100%;" id="clearHistory">🗑️ Clear History</button>
+      `;
+      const list = modalBody.querySelector('.response-list');
+      
+      history.forEach(resp => {
+        const item = document.createElement('div');
+        item.className = 'response-item';
         
-        const modalBody = modal.querySelector('.modal-body');
+        const createdAt = resp.timestamp 
+          ? new Date(resp.timestamp).toLocaleString() 
+          : 'Unknown time';
         
-        if (data.error) {
-          modalBody.innerHTML = `<div class="modal-empty">❌ ${data.error}</div>`;
-          return;
-        }
+        item.innerHTML = `
+          <div class="response-item-header">
+            <span class="response-item-id">${resp.id}</span>
+            <span class="response-item-model">${resp.model || 'unknown'}</span>
+          </div>
+          <div class="response-item-preview">${escapeHtml(resp.preview) || '(No preview)'}</div>
+          <div class="response-item-time">${createdAt}${resp.isInitial ? ' • imported' : ''}</div>
+        `;
         
-        if (!data.responses || data.responses.length === 0) {
-          modalBody.innerHTML = `<div class="modal-empty">No responses found</div>`;
-          return;
-        }
-        
-        // Render response list
-        modalBody.innerHTML = `<div class="response-list"></div>`;
-        const list = modalBody.querySelector('.response-list');
-        
-        data.responses.forEach(resp => {
-          const item = document.createElement('div');
-          item.className = 'response-item';
-          
-          const createdAt = resp.created_at 
-            ? new Date(resp.created_at * 1000).toLocaleString() 
-            : 'Unknown time';
-          
-          item.innerHTML = `
-            <div class="response-item-header">
-              <span class="response-item-id">${resp.id}</span>
-              <span class="response-item-model">${resp.model}</span>
-            </div>
-            <div class="response-item-preview">${escapeHtml(resp.preview) || '(No preview available)'}</div>
-            <div class="response-item-time">${createdAt}</div>
-          `;
-          
-          item.addEventListener('click', () => {
-            responseIdInput.value = resp.id;
-            closeModal();
-            showToast('Response ID selected', 'success');
-          });
-          
-          list.appendChild(item);
+        item.addEventListener('click', () => {
+          responseIdInput.value = resp.id;
+          closeModal();
+          showToast('Response ID selected', 'success');
         });
         
-      } catch (err) {
-        modal.querySelector('.modal-body').innerHTML = `
-          <div class="modal-empty">❌ Failed to load responses: ${err.message}</div>
-        `;
-      }
+        list.appendChild(item);
+      });
+      
+      // Clear history button
+      modal.querySelector('#clearHistory').addEventListener('click', () => {
+        if (confirm('Clear all response history?')) {
+          localStorage.removeItem(HISTORY_KEY);
+          closeModal();
+          showToast('History cleared', 'success');
+        }
+      });
     });
   </script>
 </body>

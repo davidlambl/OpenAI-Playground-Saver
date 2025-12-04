@@ -110,58 +110,6 @@ def get_models():
         return jsonify({"error": str(e), "models": []}), 500
 
 
-@app.route("/api/responses")
-def list_responses():
-    """Fetch recent responses from OpenAI."""
-    api_key = request.args.get("api_key", "").strip()
-    limit = request.args.get("limit", "50")
-    
-    if not api_key:
-        return jsonify({"error": "API key is required", "responses": []}), 400
-    
-    try:
-        limit = min(int(limit), 100)  # Cap at 100
-    except ValueError:
-        limit = 50
-    
-    try:
-        client = get_client(api_key)
-        responses = client.responses.list(limit=limit)
-        
-        # Extract relevant info from each response
-        response_list = []
-        for resp in responses.data:
-            # Try to get a preview of the conversation
-            preview = ""
-            if hasattr(resp, 'input') and resp.input:
-                if isinstance(resp.input, str):
-                    preview = resp.input[:100]
-                elif isinstance(resp.input, list) and len(resp.input) > 0:
-                    first_input = resp.input[0]
-                    if hasattr(first_input, 'content'):
-                        content = first_input.content
-                        if isinstance(content, str):
-                            preview = content[:100]
-                        elif isinstance(content, list) and len(content) > 0:
-                            for item in content:
-                                if hasattr(item, 'text'):
-                                    preview = item.text[:100]
-                                    break
-            
-            response_list.append({
-                "id": resp.id,
-                "model": resp.model if hasattr(resp, 'model') else "unknown",
-                "created_at": resp.created_at if hasattr(resp, 'created_at') else None,
-                "preview": preview + "..." if len(preview) == 100 else preview,
-                "status": resp.status if hasattr(resp, 'status') else "unknown",
-            })
-        
-        return jsonify({"responses": response_list})
-        
-    except Exception as e:
-        return jsonify({"error": str(e), "responses": []}), 500
-
-
 @app.route("/api/send", methods=["POST"])
 def send_message():
     """Send a message and get a response."""
