@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "OpenAI Playground Saver",
+  "version": "1.0",
+  "description": "Saves current chat history from OpenAI Playground/Logs to a text file.",
+  "permissions": ["activeTab", "scripting"],
+  "action": {
+    "default_popup": "popup.html"
+  }
+}
+

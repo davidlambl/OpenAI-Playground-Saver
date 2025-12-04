@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Playground Saver</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-primary: #0a0a0b;
+      --bg-secondary: #141415;
+      --bg-tertiary: #1c1c1e;
+      --bg-input: #232326;
+      --border: #2a2a2d;
+      --border-focus: #10a37f;
+      --text-primary: #e5e5e5;
+      --text-secondary: #888;
+      --text-muted: #555;
+      --accent: #10a37f;
+      --accent-hover: #0d8a6a;
+      --accent-glow: rgba(16, 163, 127, 0.15);
+      --user-bg: #1a2e28;
+      --assistant-bg: #1c1c1e;
+      --error: #ef4444;
+      --warning: #f59e0b;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Outfit', -apple-system, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Header */
+    header {
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+      padding: 1rem 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-weight: 600;
+      font-size: 1.1rem;
+    }
+
+    .logo-icon {
+      width: 28px;
+      height: 28px;
+      background: linear-gradient(135deg, var(--accent) 0%, #0d8a6a 100%);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+    }
+
+    /* Config Bar */
+    .config-bar {
+      display: flex;
+      gap: 1rem;
+      flex: 1;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .config-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .config-group label {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .config-group input,
+    .config-group select {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.5rem 0.75rem;
+      color: var(--text-primary);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .config-group input:focus,
+    .config-group select:focus {
+      outline: none;
+      border-color: var(--border-focus);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+
+    .config-group input::placeholder {
+      color: var(--text-muted);
+    }
+
+    #responseId {
+      width: 420px;
+    }
+
+    #model {
+      width: 200px;
+    }
+
+    .btn-refresh {
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      padding: 0.25rem 0.5rem;
+      font-size: 0.9rem;
+      transition: all 0.2s;
+    }
+
+    .btn-refresh:hover {
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+
+    .btn-refresh.loading {
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    .model-row {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
+
+    /* Main Chat Area */
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      max-width: 900px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 1.5rem;
+    }
+
+    .chat-container {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      padding-bottom: 1rem;
+    }
+
+    .message {
+      display: flex;
+      gap: 1rem;
+      animation: fadeIn 0.3s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .message-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+
+    .message.user .message-avatar {
+      background: var(--user-bg);
+      border: 1px solid var(--accent);
+    }
+
+    .message.assistant .message-avatar {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+    }
+
+    .message-content {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .message-role {
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+      margin-bottom: 0.35rem;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    .message-text {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .message.user .message-text {
+      background: var(--user-bg);
+      border-color: rgba(16, 163, 127, 0.3);
+    }
+
+    .message-images {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .message-images img {
+      max-width: 200px;
+      max-height: 150px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+    }
+
+    .message-meta {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      margin-top: 0.5rem;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Empty State */
+    .empty-state {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      color: var(--text-secondary);
+      gap: 1rem;
+      padding: 3rem;
+    }
+
+    .empty-state-icon {
+      font-size: 3rem;
+      opacity: 0.5;
+    }
+
+    .empty-state h2 {
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+
+    .empty-state p {
+      max-width: 400px;
+      line-height: 1.6;
+    }
+
+    .empty-state code {
+      background: var(--bg-tertiary);
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem;
+    }
+
+    /* Input Area */
+    .input-area {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem;
+      margin-top: auto;
+    }
+
+    .input-area:focus-within {
+      border-color: var(--border-focus);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+
+    /* Image Previews */
+    .image-previews {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      margin-bottom: 0.75rem;
+    }
+
+    .image-preview {
+      position: relative;
+      width: 80px;
+      height: 80px;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+
+    .image-preview img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .image-preview .remove-btn {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      width: 20px;
+      height: 20px;
+      background: rgba(0,0,0,0.7);
+      border: none;
+      border-radius: 50%;
+      color: white;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+    }
+
+    .image-preview .remove-btn:hover {
+      background: var(--error);
+    }
+
+    /* Textarea */
+    .textarea-wrapper {
+      display: flex;
+      gap: 0.75rem;
+      align-items: flex-end;
+    }
+
+    #messageInput {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: var(--text-primary);
+      font-family: 'Outfit', sans-serif;
+      font-size: 1rem;
+      line-height: 1.5;
+      resize: none;
+      min-height: 24px;
+      max-height: 200px;
+    }
+
+    #messageInput:focus {
+      outline: none;
+    }
+
+    #messageInput::placeholder {
+      color: var(--text-muted);
+    }
+
+    .input-actions {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .btn {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      padding: 0.5rem 0.75rem;
+      font-size: 1rem;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .btn:hover {
+      background: var(--bg-input);
+      color: var(--text-primary);
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: var(--accent-hover);
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* File input hidden */
+    #imageInput {
+      display: none;
+    }
+
+    /* Loading */
+    .loading {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: var(--text-secondary);
+      padding: 1rem;
+    }
+
+    .loading-dots {
+      display: flex;
+      gap: 4px;
+    }
+
+    .loading-dots span {
+      width: 6px;
+      height: 6px;
+      background: var(--accent);
+      border-radius: 50%;
+      animation: bounce 1.4s infinite ease-in-out;
+    }
+
+    .loading-dots span:nth-child(1) { animation-delay: -0.32s; }
+    .loading-dots span:nth-child(2) { animation-delay: -0.16s; }
+
+    @keyframes bounce {
+      0%, 80%, 100% { transform: scale(0); }
+      40% { transform: scale(1); }
+    }
+
+    /* Toast notifications */
+    .toast {
+      position: fixed;
+      bottom: 2rem;
+      right: 2rem;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      animation: slideIn 0.3s ease;
+      z-index: 1000;
+    }
+
+    .toast.error {
+      border-color: var(--error);
+    }
+
+    .toast.success {
+      border-color: var(--accent);
+    }
+
+    @keyframes slideIn {
+      from { transform: translateX(100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+
+    /* Response ID display */
+    .response-id-display {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      padding: 0.5rem 1rem;
+      background: var(--bg-secondary);
+      border-radius: 6px;
+      margin-top: 0.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .response-id-display button {
+      background: none;
+      border: none;
+      color: var(--accent);
+      cursor: pointer;
+      padding: 0.2rem;
+    }
+
+    .response-id-display button:hover {
+      color: var(--accent-hover);
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      header {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .config-bar {
+        flex-direction: column;
+      }
+
+      .config-group input,
+      .config-group select {
+        width: 100% !important;
+      }
+
+      #responseId {
+        width: 100% !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo">
+      <div class="logo-icon">💾</div>
+      <span>Playground Saver</span>
+    </div>
+    <div class="config-bar">
+      <div class="config-group">
+        <label>Response ID</label>
+        <input type="text" id="responseId" placeholder="resp_0a6e586e566ede67..." autocomplete="off">
+      </div>
+      <div class="config-group">
+        <label>Model</label>
+        <div class="model-row">
+          <select id="model">
+            <option value="gpt-4o">Loading models...</option>
+          </select>
+          <button class="btn-refresh" id="refreshModels" title="Refresh model list">↻</button>
+        </div>
+      </div>
+      <div class="config-group">
+        <label>Reasoning</label>
+        <select id="reasoningEffort">
+          <option value="">None</option>
+          <option value="low">Low</option>
+          <option value="medium">Medium</option>
+          <option value="high">High</option>
+        </select>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div class="chat-container" id="chatContainer">
+      <div class="empty-state" id="emptyState">
+        <div class="empty-state-icon">💬</div>
+        <h2>Continue a Conversation</h2>
+        <p>
+          Paste a response ID from your OpenAI Logs dashboard to continue that conversation.
+          <br><br>
+          Example: <code>resp_0a6e586e566ede67...</code>
+        </p>
+      </div>
+    </div>
+
+    <div class="input-area">
+      <div class="image-previews" id="imagePreviews"></div>
+      <div class="textarea-wrapper">
+        <textarea 
+          id="messageInput" 
+          placeholder="Type your message... (Shift+Enter for new line)"
+          rows="1"
+        ></textarea>
+        <div class="input-actions">
+          <input type="file" id="imageInput" accept="image/*" multiple>
+          <button class="btn" id="attachBtn" title="Attach images">📎</button>
+          <button class="btn btn-primary" id="sendBtn" title="Send message">➤</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // State
+    let pendingImages = [];
+    let currentResponseId = '';
+    let isLoading = false;
+
+    // DOM Elements
+    const responseIdInput = document.getElementById('responseId');
+    const modelSelect = document.getElementById('model');
+    const reasoningSelect = document.getElementById('reasoningEffort');
+    const chatContainer = document.getElementById('chatContainer');
+    const emptyState = document.getElementById('emptyState');
+    const messageInput = document.getElementById('messageInput');
+    const imageInput = document.getElementById('imageInput');
+    const imagePreviews = document.getElementById('imagePreviews');
+    const attachBtn = document.getElementById('attachBtn');
+    const sendBtn = document.getElementById('sendBtn');
+
+    // Auto-resize textarea
+    messageInput.addEventListener('input', () => {
+      messageInput.style.height = 'auto';
+      messageInput.style.height = Math.min(messageInput.scrollHeight, 200) + 'px';
+    });
+
+    // Handle Enter key
+    messageInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+    // Attach images
+    attachBtn.addEventListener('click', () => imageInput.click());
+    
+    imageInput.addEventListener('change', (e) => {
+      const files = Array.from(e.target.files);
+      files.forEach(file => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          pendingImages.push({
+            file: file,
+            dataUrl: e.target.result,
+            name: file.name
+          });
+          renderImagePreviews();
+        };
+        reader.readAsDataURL(file);
+      });
+      imageInput.value = '';
+    });
+
+    function renderImagePreviews() {
+      imagePreviews.innerHTML = pendingImages.map((img, i) => `
+        <div class="image-preview">
+          <img src="${img.dataUrl}" alt="${img.name}">
+          <button class="remove-btn" onclick="removeImage(${i})">×</button>
+        </div>
+      `).join('');
+    }
+
+    function removeImage(index) {
+      pendingImages.splice(index, 1);
+      renderImagePreviews();
+    }
+
+    // Send message
+    sendBtn.addEventListener('click', sendMessage);
+
+    async function sendMessage() {
+      const responseId = responseIdInput.value.trim();
+      const message = messageInput.value.trim();
+      const model = modelSelect.value;
+      const reasoningEffort = reasoningSelect.value;
+
+      if (!responseId) {
+        showToast('Please enter a Response ID', 'error');
+        responseIdInput.focus();
+        return;
+      }
+
+      if (!message && pendingImages.length === 0) {
+        showToast('Please enter a message or attach images', 'error');
+        return;
+      }
+
+      if (isLoading) return;
+      isLoading = true;
+      sendBtn.disabled = true;
+
+      // Hide empty state
+      emptyState.style.display = 'none';
+
+      // Add user message to chat
+      addMessage('user', message, pendingImages.map(img => img.dataUrl));
+
+      // Clear input
+      messageInput.value = '';
+      messageInput.style.height = 'auto';
+
+      // Show loading
+      const loadingEl = document.createElement('div');
+      loadingEl.className = 'loading';
+      loadingEl.innerHTML = `
+        <div class="loading-dots">
+          <span></span><span></span><span></span>
+        </div>
+        <span>Thinking...</span>
+      `;
+      chatContainer.appendChild(loadingEl);
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+
+      // Build form data
+      const formData = new FormData();
+      formData.append('response_id', responseId);
+      formData.append('message', message);
+      formData.append('model', model);
+      formData.append('reasoning_effort', reasoningEffort);
+      
+      pendingImages.forEach(img => {
+        formData.append('images', img.file);
+      });
+
+      // Clear pending images
+      pendingImages = [];
+      renderImagePreviews();
+
+      try {
+        const res = await fetch('/api/send', {
+          method: 'POST',
+          body: formData
+        });
+
+        const data = await res.json();
+
+        // Remove loading
+        loadingEl.remove();
+
+        if (data.error) {
+          showToast(data.error, 'error');
+          isLoading = false;
+          sendBtn.disabled = false;
+          return;
+        }
+
+        // Add assistant message
+        addMessage('assistant', data.response, [], data.new_response_id);
+
+        // Update response ID for next message
+        currentResponseId = data.new_response_id;
+        responseIdInput.value = data.new_response_id;
+
+        showToast('Response received', 'success');
+
+      } catch (err) {
+        loadingEl.remove();
+        showToast('Network error: ' + err.message, 'error');
+      }
+
+      isLoading = false;
+      sendBtn.disabled = false;
+    }
+
+    function addMessage(role, text, images = [], newResponseId = null) {
+      const avatar = role === 'user' ? '👤' : '🤖';
+      const div = document.createElement('div');
+      div.className = `message ${role}`;
+      
+      let imagesHtml = '';
+      if (images.length > 0) {
+        imagesHtml = `
+          <div class="message-images">
+            ${images.map(src => `<img src="${src}" alt="Attached image">`).join('')}
+          </div>
+        `;
+      }
+
+      let metaHtml = '';
+      if (newResponseId) {
+        metaHtml = `
+          <div class="response-id-display">
+            <span>New ID: ${newResponseId}</span>
+            <button onclick="copyToClipboard('${newResponseId}')" title="Copy ID">📋</button>
+          </div>
+        `;
+      }
+
+      div.innerHTML = `
+        <div class="message-avatar">${avatar}</div>
+        <div class="message-content">
+          <div class="message-role">${role}</div>
+          <div class="message-text">${escapeHtml(text)}</div>
+          ${imagesHtml}
+          ${metaHtml}
+        </div>
+      `;
+
+      chatContainer.appendChild(div);
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function copyToClipboard(text) {
+      navigator.clipboard.writeText(text).then(() => {
+        showToast('Copied to clipboard', 'success');
+      });
+    }
+
+    function showToast(message, type = 'info') {
+      const toast = document.createElement('div');
+      toast.className = `toast ${type}`;
+      toast.innerHTML = `
+        <span>${type === 'error' ? '❌' : type === 'success' ? '✓' : 'ℹ️'}</span>
+        <span>${message}</span>
+      `;
+      document.body.appendChild(toast);
+
+      setTimeout(() => {
+        toast.style.animation = 'slideIn 0.3s ease reverse';
+        setTimeout(() => toast.remove(), 300);
+      }, 3000);
+    }
+
+    // Load from URL params
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('id')) {
+      responseIdInput.value = params.get('id');
+    }
+
+    // Fetch models from API
+    const refreshModelsBtn = document.getElementById('refreshModels');
+    
+    async function fetchModels() {
+      refreshModelsBtn.classList.add('loading');
+      try {
+        const res = await fetch('/api/models');
+        const data = await res.json();
+        
+        if (data.error) {
+          showToast('Failed to load models: ' + data.error, 'error');
+          return;
+        }
+        
+        const currentValue = modelSelect.value;
+        const urlModel = params.get('model');
+        
+        modelSelect.innerHTML = data.models.map(model => 
+          `<option value="${model}">${model}</option>`
+        ).join('');
+        
+        // Restore selection: URL param > previous selection > default to gpt-4o
+        if (urlModel && data.models.includes(urlModel)) {
+          modelSelect.value = urlModel;
+        } else if (data.models.includes(currentValue)) {
+          modelSelect.value = currentValue;
+        } else if (data.models.includes('gpt-4o')) {
+          modelSelect.value = 'gpt-4o';
+        }
+        
+      } catch (err) {
+        showToast('Network error loading models', 'error');
+        // Fallback to hardcoded list
+        modelSelect.innerHTML = `
+          <option value="gpt-4o">gpt-4o</option>
+          <option value="gpt-4o-mini">gpt-4o-mini</option>
+          <option value="o1">o1</option>
+          <option value="o3">o3</option>
+        `;
+      }
+      refreshModelsBtn.classList.remove('loading');
+    }
+    
+    refreshModelsBtn.addEventListener('click', fetchModels);
+    
+    // Fetch models on page load
+    fetchModels();
+  </script>
+</body>
+</html>
+
