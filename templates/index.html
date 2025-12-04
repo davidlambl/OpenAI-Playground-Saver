@@ -442,6 +442,52 @@
       font-family: 'JetBrains Mono', monospace;
     }
 
+    .message-actions {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+
+    .message:hover .message-actions {
+      opacity: 1;
+    }
+
+    .message-action-btn {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 0.25rem 0.5rem;
+      font-size: 0.7rem;
+      transition: all 0.2s;
+    }
+
+    .message-action-btn:hover {
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+
+    /* Export button in header */
+    .export-btn {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.85rem;
+      transition: all 0.2s;
+      margin-left: auto;
+    }
+
+    .export-btn:hover {
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+
     /* Empty State */
     .empty-state {
       flex: 1;
@@ -756,6 +802,7 @@
           <option value="high">High</option>
         </select>
       </div>
+      <button class="export-btn" id="exportBtn" title="Export conversation as Markdown">📥 Export</button>
     </div>
   </header>
 
@@ -1038,12 +1085,17 @@
         `;
       }
 
+      const msgId = 'msg-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+      
       div.innerHTML = `
         <div class="message-avatar">${avatar}</div>
         <div class="message-content">
           <div class="message-role">${role}</div>
-          <div class="message-text">${escapeHtml(text)}</div>
+          <div class="message-text" id="${msgId}">${escapeHtml(text)}</div>
           ${imagesHtml}
+          <div class="message-actions">
+            <button class="message-action-btn" onclick="copyMessageText('${msgId}')" title="Copy message">📋 Copy</button>
+          </div>
           ${metaHtml}
         </div>
       `;
@@ -1063,6 +1115,51 @@
         showToast('Copied to clipboard', 'success');
       });
     }
+
+    function copyMessageText(msgId) {
+      const el = document.getElementById(msgId);
+      if (el) {
+        navigator.clipboard.writeText(el.innerText).then(() => {
+          showToast('Message copied', 'success');
+        });
+      }
+    }
+
+    // Export conversation as Markdown
+    document.getElementById('exportBtn').addEventListener('click', () => {
+      const messages = chatContainer.querySelectorAll('.message');
+      if (messages.length === 0) {
+        showToast('No messages to export', 'error');
+        return;
+      }
+
+      let markdown = `# Conversation Export\n\n`;
+      markdown += `**Date:** ${new Date().toLocaleString()}\n`;
+      markdown += `**Model:** ${modelSelect.value}\n\n`;
+      markdown += `---\n\n`;
+
+      messages.forEach(msg => {
+        const role = msg.classList.contains('user') ? 'User' : 'Assistant';
+        const textEl = msg.querySelector('.message-text');
+        const text = textEl ? textEl.innerText : '';
+        
+        markdown += `## ${role}\n\n${text}\n\n---\n\n`;
+      });
+
+      // Download as file
+      const blob = new Blob([markdown], { type: 'text/markdown' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const timestamp = new Date().toISOString().slice(0, 16).replace('T', '_').replace(':', '-');
+      a.download = `conversation_${timestamp}.md`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      showToast('Exported as Markdown', 'success');
+    });
 
     function showToast(message, type = 'info') {
       const toast = document.createElement('div');
