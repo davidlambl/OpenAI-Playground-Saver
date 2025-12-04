@@ -168,6 +168,169 @@ def get_response_history(response_id: str):
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/conversations", methods=["POST"])
+def create_conversation():
+    """Create a new conversation, optionally from a response ID."""
+    api_key = request.form.get("api_key", "").strip()
+    name = request.form.get("name", "").strip()
+    from_response_id = request.form.get("from_response_id", "").strip()
+    
+    if not api_key:
+        return jsonify({"error": "API key is required"}), 400
+    
+    try:
+        client = get_client(api_key)
+        
+        # Create a new conversation
+        conversation = client.conversations.create()
+        conv_id = conversation.id
+        
+        items_added = 0
+        
+        # If converting from a response, get its history and add to conversation
+        if from_response_id:
+            # Get the response and its input items
+            response = client.responses.retrieve(from_response_id)
+            input_items = client.responses.input_items.list(from_response_id)
+            
+            # Add each message to the conversation
+            for item in input_items.data:
+                if item.type == "message":
+                    role = item.role if hasattr(item, 'role') else "user"
+                    content = ""
+                    if hasattr(item, 'content') and item.content:
+                        for c in item.content:
+                            if hasattr(c, 'text'):
+                                content += c.text
+                    
+                    if content:
+                        client.conversations.items.create(
+                            conversation_id=conv_id,
+                            item={
+                                "type": "message",
+                                "role": role,
+                                "content": [{"type": "input_text", "text": content}]
+                            }
+                        )
+                        items_added += 1
+            
+            # Add the assistant's output from the response
+            if hasattr(response, 'output') and response.output:
+                output_text = ""
+                for out_item in response.output:
+                    if out_item.type == "message":
+                        for c in out_item.content:
+                            if hasattr(c, 'text'):
+                                output_text += c.text
+                
+                if output_text:
+                    client.conversations.items.create(
+                        conversation_id=conv_id,
+                        item={
+                            "type": "message",
+                            "role": "assistant",
+                            "content": [{"type": "input_text", "text": output_text}]
+                        }
+                    )
+                    items_added += 1
+        
+        return jsonify({
+            "success": True,
+            "conversation_id": conv_id,
+            "items_added": items_added,
+            "name": name,
+            "from_response_id": from_response_id or None,
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/conversations/<conv_id>/continue", methods=["POST"])
+def continue_conversation_api(conv_id: str):
+    """Send a message in an existing conversation."""
+    api_key = request.form.get("api_key", "").strip()
+    message = request.form.get("message", "").strip()
+    model = request.form.get("model", "gpt-4o").strip()
+    reasoning_effort = request.form.get("reasoning_effort", "").strip() or None
+    
+    if not api_key:
+        return jsonify({"error": "API key is required"}), 400
+    
+    if not message:
+        return jsonify({"error": "Message is required"}), 400
+    
+    try:
+        client = get_client(api_key)
+        
+        # Create a response using the conversation
+        params = {
+            "model": model,
+            "conversation_id": conv_id,
+            "input": message,
+        }
+        
+        if reasoning_effort:
+            params["reasoning"] = {"effort": reasoning_effort}
+        
+        response = client.responses.create(**params)
+        
+        # Extract response text
+        assistant_text = ""
+        for item in response.output:
+            if item.type == "message":
+                for content in item.content:
+                    if hasattr(content, 'text'):
+                        assistant_text += content.text
+        
+        return jsonify({
+            "success": True,
+            "response": assistant_text,
+            "response_id": response.id,
+            "conversation_id": conv_id,
+            "model": response.model,
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/conversations/<conv_id>/items")
+def get_conversation_items(conv_id: str):
+    """Get all items in a conversation."""
+    api_key = request.args.get("api_key", "").strip()
+    
+    if not api_key:
+        return jsonify({"error": "API key is required"}), 400
+    
+    try:
+        client = get_client(api_key)
+        items = client.conversations.items.list(conv_id)
+        
+        messages = []
+        for item in items.data:
+            if item.type == "message":
+                role = item.role if hasattr(item, 'role') else "unknown"
+                content = ""
+                if hasattr(item, 'content') and item.content:
+                    for c in item.content:
+                        if hasattr(c, 'text'):
+                            content += c.text
+                messages.append({
+                    "id": item.id if hasattr(item, 'id') else None,
+                    "role": role,
+                    "content": content
+                })
+        
+        return jsonify({
+            "conversation_id": conv_id,
+            "messages": messages,
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/send", methods=["POST"])
 def send_message():
     """Send a message and get a response."""

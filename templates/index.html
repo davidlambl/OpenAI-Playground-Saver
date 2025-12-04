@@ -730,11 +730,12 @@
         </div>
       </div>
       <div class="config-group">
-        <label>Response ID</label>
+        <label>Response / Conversation ID</label>
         <div class="response-id-row">
-          <input type="text" id="responseId" placeholder="resp_0a6e586e566ede67..." autocomplete="off">
+          <input type="text" id="responseId" placeholder="resp_... or conv_..." autocomplete="off">
           <button class="btn-browse" id="loadHistory" title="Load conversation history">📜</button>
-          <button class="btn-browse" id="browseResponses" title="Browse saved responses">📋</button>
+          <button class="btn-browse" id="convertToConv" title="Convert to Conversation">🔄</button>
+          <button class="btn-browse" id="browseResponses" title="Browse saved">📋</button>
         </div>
       </div>
       <div class="config-group">
@@ -955,7 +956,19 @@
       renderImagePreviews();
 
       try {
-        const res = await fetch('/api/send', {
+        // Determine endpoint based on ID type
+        const id = responseId;
+        const isConversation = id.startsWith('conv_');
+        const endpoint = isConversation 
+          ? `/api/conversations/${id}/continue`
+          : '/api/send';
+        
+        // For conversations, we don't need to send response_id
+        if (isConversation) {
+          formData.delete('response_id');
+        }
+        
+        const res = await fetch(endpoint, {
           method: 'POST',
           body: formData
         });
@@ -973,14 +986,22 @@
         }
 
         // Add assistant message
-        addMessage('assistant', data.response, [], data.new_response_id);
+        const newId = data.conversation_id || data.new_response_id;
+        addMessage('assistant', data.response, [], newId);
 
-        // Update response ID for next message
-        currentResponseId = data.new_response_id;
-        responseIdInput.value = data.new_response_id;
+        // Update ID for next message
+        // For conversations, keep the same conv_id
+        // For responses, update to new response_id
+        if (data.conversation_id) {
+          currentResponseId = data.conversation_id;
+          // Don't change the input - keep the conv_id
+        } else {
+          currentResponseId = data.new_response_id;
+          responseIdInput.value = data.new_response_id;
+        }
         
         // Save to history
-        saveToHistory(data.new_response_id, data.model, message || '(image attachment)');
+        saveToHistory(newId, data.model, message || '(image attachment)');
 
         showToast('Response received', 'success');
 
@@ -1132,12 +1153,76 @@
     // Fetch models on page load
     fetchModels();
 
+    // Track if we're using a conversation ID
+    let usingConversation = false;
+    
+    // Convert to Conversation button
+    const convertToConvBtn = document.getElementById('convertToConv');
+    
+    convertToConvBtn.addEventListener('click', async () => {
+      const apiKey = apiKeyInput.value.trim();
+      const responseId = responseIdInput.value.trim();
+      
+      if (!apiKey) {
+        showToast('Please enter your API key first', 'error');
+        return;
+      }
+      
+      if (!responseId) {
+        showToast('Please enter a Response ID first', 'error');
+        return;
+      }
+      
+      if (responseId.startsWith('conv_')) {
+        showToast('Already a conversation ID!', 'error');
+        return;
+      }
+      
+      // Ask for a name
+      const name = prompt('Give this conversation a name (optional):') || '';
+      
+      convertToConvBtn.textContent = '⏳';
+      
+      try {
+        const formData = new FormData();
+        formData.append('api_key', apiKey);
+        formData.append('from_response_id', responseId);
+        formData.append('name', name);
+        
+        const res = await fetch('/api/conversations', {
+          method: 'POST',
+          body: formData
+        });
+        
+        const data = await res.json();
+        
+        if (data.error) {
+          showToast('Error: ' + data.error, 'error');
+          return;
+        }
+        
+        // Update the input with the new conversation ID
+        responseIdInput.value = data.conversation_id;
+        usingConversation = true;
+        
+        // Save to history with the name
+        saveToHistory(data.conversation_id, 'conversation', name || '(converted from ' + responseId.slice(0, 20) + '...)', false);
+        
+        showToast(`Converted! ${data.items_added} messages. New ID: ${data.conversation_id}`, 'success');
+        
+      } catch (err) {
+        showToast('Failed to convert: ' + err.message, 'error');
+      } finally {
+        convertToConvBtn.textContent = '🔄';
+      }
+    });
+    
     // Load History button
     const loadHistoryBtn = document.getElementById('loadHistory');
     
     loadHistoryBtn.addEventListener('click', async () => {
       const apiKey = apiKeyInput.value.trim();
-      const responseId = responseIdInput.value.trim();
+      const id = responseIdInput.value.trim();
       
       if (!apiKey) {
         showToast('Please enter your API key first', 'error');
@@ -1145,11 +1230,15 @@
         return;
       }
       
-      if (!responseId) {
-        showToast('Please enter a Response ID first', 'error');
+      if (!id) {
+        showToast('Please enter a Response or Conversation ID first', 'error');
         responseIdInput.focus();
         return;
       }
+      
+      // Determine if it's a conversation or response
+      const isConversation = id.startsWith('conv_');
+      usingConversation = isConversation;
       
       // Hide empty state
       emptyState.style.display = 'none';
@@ -1162,12 +1251,17 @@
       loadingEl.className = 'loading';
       loadingEl.innerHTML = `
         <div class="loading-dots"><span></span><span></span><span></span></div>
-        <span>Loading conversation history...</span>
+        <span>Loading ${isConversation ? 'conversation' : 'response history'}...</span>
       `;
       chatContainer.appendChild(loadingEl);
       
       try {
-        const res = await fetch(`/api/history/${responseId}?api_key=${encodeURIComponent(apiKey)}`);
+        // Use different endpoint for conversations vs responses
+        const endpoint = isConversation 
+          ? `/api/conversations/${id}/items?api_key=${encodeURIComponent(apiKey)}`
+          : `/api/history/${id}?api_key=${encodeURIComponent(apiKey)}`;
+        
+        const res = await fetch(endpoint);
         const data = await res.json();
         
         loadingEl.remove();
@@ -1185,9 +1279,9 @@
           });
         }
         
-        // Add the assistant's output
-        if (data.output) {
-          addMessage('assistant', data.output, [], responseId);
+        // For responses, also add the output
+        if (!isConversation && data.output) {
+          addMessage('assistant', data.output, [], id);
         }
         
         // Update model selector if we got model info
