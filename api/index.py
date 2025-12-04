@@ -202,7 +202,7 @@ def create_conversation():
                             items=[{
                                 "type": "message",
                                 "role": role,
-                                "content": [{"type": "input_text", "text": content}]
+                                "content": [{"type": "output_text", "text": content}]
                             }]
                         )
                         items_added += 1
@@ -222,7 +222,7 @@ def create_conversation():
                         items=[{
                             "type": "message",
                             "role": "assistant",
-                            "content": [{"type": "input_text", "text": output_text}]
+                            "content": [{"type": "output_text", "text": output_text}]
                         }]
                     )
                     items_added += 1
