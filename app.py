@@ -206,9 +206,11 @@ def create_conversation():
                     if content:
                         client.conversations.items.create(
                             conversation_id=conv_id,
-                            type="message",
-                            role=role,
-                            content=[{"type": "input_text", "text": content}]
+                            items=[{
+                                "type": "message",
+                                "role": role,
+                                "content": [{"type": "input_text", "text": content}]
+                            }]
                         )
                         items_added += 1
             
@@ -224,9 +226,11 @@ def create_conversation():
                 if output_text:
                     client.conversations.items.create(
                         conversation_id=conv_id,
-                        type="message",
-                        role="assistant",
-                        content=[{"type": "input_text", "text": output_text}]
+                        items=[{
+                            "type": "message",
+                            "role": "assistant",
+                            "content": [{"type": "input_text", "text": output_text}]
+                        }]
                     )
                     items_added += 1
         
