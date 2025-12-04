@@ -121,7 +121,162 @@
     }
 
     #responseId {
-      width: 420px;
+      width: 380px;
+    }
+
+    .response-id-row {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
+
+    .btn-browse {
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      padding: 0.25rem 0.5rem;
+      font-size: 0.9rem;
+      transition: all 0.2s;
+    }
+
+    .btn-browse:hover {
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+
+    /* Response Browser Modal */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      animation: fadeIn 0.2s ease;
+    }
+
+    .modal {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      width: 90%;
+      max-width: 700px;
+      max-height: 80vh;
+      display: flex;
+      flex-direction: column;
+      animation: slideUp 0.2s ease;
+    }
+
+    @keyframes slideUp {
+      from { transform: translateY(20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    .modal-header {
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .modal-header h2 {
+      font-size: 1.1rem;
+      font-weight: 500;
+    }
+
+    .modal-close {
+      background: none;
+      border: none;
+      color: var(--text-secondary);
+      font-size: 1.5rem;
+      cursor: pointer;
+      padding: 0.25rem;
+      line-height: 1;
+    }
+
+    .modal-close:hover {
+      color: var(--text-primary);
+    }
+
+    .modal-body {
+      padding: 1rem;
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    .response-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .response-item {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .response-item:hover {
+      border-color: var(--accent);
+      background: var(--bg-input);
+    }
+
+    .response-item-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 0.5rem;
+    }
+
+    .response-item-id {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      color: var(--accent);
+    }
+
+    .response-item-model {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      background: var(--bg-primary);
+      padding: 0.15rem 0.5rem;
+      border-radius: 4px;
+    }
+
+    .response-item-preview {
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      line-height: 1.4;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .response-item-time {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      margin-top: 0.35rem;
+    }
+
+    .modal-loading {
+      text-align: center;
+      padding: 2rem;
+      color: var(--text-secondary);
+    }
+
+    .modal-empty {
+      text-align: center;
+      padding: 2rem;
+      color: var(--text-muted);
     }
 
     #apiKey {
@@ -576,7 +731,10 @@
       </div>
       <div class="config-group">
         <label>Response ID</label>
-        <input type="text" id="responseId" placeholder="resp_0a6e586e566ede67..." autocomplete="off">
+        <div class="response-id-row">
+          <input type="text" id="responseId" placeholder="resp_0a6e586e566ede67..." autocomplete="off">
+          <button class="btn-browse" id="browseResponses" title="Browse recent responses">📋</button>
+        </div>
       </div>
       <div class="config-group">
         <label>Model</label>
@@ -956,6 +1114,97 @@
     
     // Fetch models on page load
     fetchModels();
+
+    // Browse Responses functionality
+    const browseResponsesBtn = document.getElementById('browseResponses');
+    
+    browseResponsesBtn.addEventListener('click', async () => {
+      const apiKey = apiKeyInput.value.trim();
+      if (!apiKey) {
+        showToast('Please enter your API key first', 'error');
+        apiKeyInput.focus();
+        return;
+      }
+      
+      // Create and show modal
+      const modal = document.createElement('div');
+      modal.className = 'modal-overlay';
+      modal.innerHTML = `
+        <div class="modal">
+          <div class="modal-header">
+            <h2>📋 Recent Responses</h2>
+            <button class="modal-close">&times;</button>
+          </div>
+          <div class="modal-body">
+            <div class="modal-loading">
+              <div class="loading-dots"><span></span><span></span><span></span></div>
+              <p>Loading responses...</p>
+            </div>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+      
+      // Close modal handlers
+      const closeModal = () => modal.remove();
+      modal.querySelector('.modal-close').addEventListener('click', closeModal);
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeModal();
+      });
+      
+      // Fetch responses
+      try {
+        const res = await fetch('/api/responses?api_key=' + encodeURIComponent(apiKey) + '&limit=50');
+        const data = await res.json();
+        
+        const modalBody = modal.querySelector('.modal-body');
+        
+        if (data.error) {
+          modalBody.innerHTML = `<div class="modal-empty">❌ ${data.error}</div>`;
+          return;
+        }
+        
+        if (!data.responses || data.responses.length === 0) {
+          modalBody.innerHTML = `<div class="modal-empty">No responses found</div>`;
+          return;
+        }
+        
+        // Render response list
+        modalBody.innerHTML = `<div class="response-list"></div>`;
+        const list = modalBody.querySelector('.response-list');
+        
+        data.responses.forEach(resp => {
+          const item = document.createElement('div');
+          item.className = 'response-item';
+          
+          const createdAt = resp.created_at 
+            ? new Date(resp.created_at * 1000).toLocaleString() 
+            : 'Unknown time';
+          
+          item.innerHTML = `
+            <div class="response-item-header">
+              <span class="response-item-id">${resp.id}</span>
+              <span class="response-item-model">${resp.model}</span>
+            </div>
+            <div class="response-item-preview">${escapeHtml(resp.preview) || '(No preview available)'}</div>
+            <div class="response-item-time">${createdAt}</div>
+          `;
+          
+          item.addEventListener('click', () => {
+            responseIdInput.value = resp.id;
+            closeModal();
+            showToast('Response ID selected', 'success');
+          });
+          
+          list.appendChild(item);
+        });
+        
+      } catch (err) {
+        modal.querySelector('.modal-body').innerHTML = `
+          <div class="modal-empty">❌ Failed to load responses: ${err.message}</div>
+        `;
+      }
+    });
   </script>
 </body>
 </html>

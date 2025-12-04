@@ -20,3 +20,5 @@ env/
 # Project specific
 *.log
 
+.vercel
+.env*.local
