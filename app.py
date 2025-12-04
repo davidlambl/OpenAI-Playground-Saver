@@ -21,9 +21,9 @@ app.secret_key = os.urandom(24)
 conversations: dict[str, list[dict]] = {}
 
 
-def get_client() -> OpenAI:
-    """Get OpenAI client."""
-    return OpenAI()
+def get_client(api_key: str) -> OpenAI:
+    """Get OpenAI client with provided API key."""
+    return OpenAI(api_key=api_key)
 
 
 def encode_image_bytes(data: bytes, filename: str) -> tuple[str, str]:
@@ -71,8 +71,13 @@ def index():
 @app.route("/api/models")
 def get_models():
     """Fetch available models from OpenAI."""
+    api_key = request.args.get("api_key", "").strip()
+    
+    if not api_key:
+        return jsonify({"error": "API key is required", "models": []}), 400
+    
     try:
-        client = get_client()
+        client = get_client(api_key)
         models = client.models.list()
         
         # Filter and sort models - prioritize chat/responses-capable models
@@ -110,10 +115,14 @@ def send_message():
     """Send a message and get a response."""
     try:
         # Get form data
+        api_key = request.form.get("api_key", "").strip()
         response_id = request.form.get("response_id", "").strip()
         message = request.form.get("message", "").strip()
         model = request.form.get("model", "gpt-4o").strip()
         reasoning_effort = request.form.get("reasoning_effort", "").strip() or None
+        
+        if not api_key:
+            return jsonify({"error": "API key is required"}), 400
         
         if not response_id:
             return jsonify({"error": "Response ID is required"}), 400
@@ -148,7 +157,7 @@ def send_message():
             params["reasoning"] = {"effort": reasoning_effort}
         
         # Make API call
-        client = get_client()
+        client = get_client(api_key)
         response = client.responses.create(**params)
         
         # Extract response text

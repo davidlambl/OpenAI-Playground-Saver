@@ -17,10 +17,10 @@ app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-key-change-in-prod")
 # Each function invocation is stateless
 
 
-def get_client():
-    """Get OpenAI client."""
+def get_client(api_key: str):
+    """Get OpenAI client with provided API key."""
     from openai import OpenAI
-    return OpenAI()
+    return OpenAI(api_key=api_key)
 
 
 def encode_image_bytes(data: bytes, filename: str) -> tuple[str, str]:
@@ -68,8 +68,13 @@ def index():
 @app.route("/api/models")
 def get_models():
     """Fetch available models from OpenAI."""
+    api_key = request.args.get("api_key", "").strip()
+    
+    if not api_key:
+        return jsonify({"error": "API key is required", "models": []}), 400
+    
     try:
-        client = get_client()
+        client = get_client(api_key)
         models = client.models.list()
         
         model_ids = []
@@ -102,10 +107,14 @@ def get_models():
 def send_message():
     """Send a message and get a response."""
     try:
+        api_key = request.form.get("api_key", "").strip()
         response_id = request.form.get("response_id", "").strip()
         message = request.form.get("message", "").strip()
         model = request.form.get("model", "gpt-4o").strip()
         reasoning_effort = request.form.get("reasoning_effort", "").strip() or None
+        
+        if not api_key:
+            return jsonify({"error": "API key is required"}), 400
         
         if not response_id:
             return jsonify({"error": "Response ID is required"}), 400
@@ -131,7 +140,7 @@ def send_message():
         if reasoning_effort:
             params["reasoning"] = {"effort": reasoning_effort}
         
-        client = get_client()
+        client = get_client(api_key)
         response = client.responses.create(**params)
         
         assistant_text = ""

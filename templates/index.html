@@ -124,6 +124,32 @@
       width: 420px;
     }
 
+    #apiKey {
+      width: 200px;
+    }
+
+    .api-key-row {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
+
+    .btn-toggle-visibility {
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      padding: 0.25rem 0.5rem;
+      font-size: 0.8rem;
+      transition: all 0.2s;
+    }
+
+    .btn-toggle-visibility:hover {
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+
     #model {
       width: 200px;
     }
@@ -542,6 +568,13 @@
     </div>
     <div class="config-bar">
       <div class="config-group">
+        <label>API Key</label>
+        <div class="api-key-row">
+          <input type="password" id="apiKey" placeholder="sk-..." autocomplete="off">
+          <button class="btn-toggle-visibility" id="toggleApiKey" title="Show/hide API key">👁</button>
+        </div>
+      </div>
+      <div class="config-group">
         <label>Response ID</label>
         <input type="text" id="responseId" placeholder="resp_0a6e586e566ede67..." autocomplete="off">
       </div>
@@ -603,6 +636,8 @@
     let isLoading = false;
 
     // DOM Elements
+    const apiKeyInput = document.getElementById('apiKey');
+    const toggleApiKeyBtn = document.getElementById('toggleApiKey');
     const responseIdInput = document.getElementById('responseId');
     const modelSelect = document.getElementById('model');
     const reasoningSelect = document.getElementById('reasoningEffort');
@@ -613,6 +648,35 @@
     const imagePreviews = document.getElementById('imagePreviews');
     const attachBtn = document.getElementById('attachBtn');
     const sendBtn = document.getElementById('sendBtn');
+
+    // Load API key from localStorage
+    const savedApiKey = localStorage.getItem('openai_api_key');
+    if (savedApiKey) {
+      apiKeyInput.value = savedApiKey;
+    }
+
+    // Save API key to localStorage on change and refresh models
+    apiKeyInput.addEventListener('change', () => {
+      const key = apiKeyInput.value.trim();
+      if (key) {
+        localStorage.setItem('openai_api_key', key);
+        fetchModels(); // Refresh model list with new key
+      } else {
+        localStorage.removeItem('openai_api_key');
+        modelSelect.innerHTML = '<option value="gpt-4o">Enter API key to load models</option>';
+      }
+    });
+
+    // Toggle API key visibility
+    toggleApiKeyBtn.addEventListener('click', () => {
+      if (apiKeyInput.type === 'password') {
+        apiKeyInput.type = 'text';
+        toggleApiKeyBtn.textContent = '🙈';
+      } else {
+        apiKeyInput.type = 'password';
+        toggleApiKeyBtn.textContent = '👁';
+      }
+    });
 
     // Auto-resize textarea
     messageInput.addEventListener('input', () => {
@@ -666,10 +730,17 @@
     sendBtn.addEventListener('click', sendMessage);
 
     async function sendMessage() {
+      const apiKey = apiKeyInput.value.trim();
       const responseId = responseIdInput.value.trim();
       const message = messageInput.value.trim();
       const model = modelSelect.value;
       const reasoningEffort = reasoningSelect.value;
+
+      if (!apiKey) {
+        showToast('Please enter your OpenAI API key', 'error');
+        apiKeyInput.focus();
+        return;
+      }
 
       if (!responseId) {
         showToast('Please enter a Response ID', 'error');
@@ -710,6 +781,7 @@
 
       // Build form data
       const formData = new FormData();
+      formData.append('api_key', apiKey);
       formData.append('response_id', responseId);
       formData.append('message', message);
       formData.append('model', model);
@@ -834,9 +906,16 @@
     const refreshModelsBtn = document.getElementById('refreshModels');
     
     async function fetchModels() {
+      const apiKey = apiKeyInput.value.trim();
+      if (!apiKey) {
+        // Don't fetch models without API key - show placeholder
+        modelSelect.innerHTML = '<option value="gpt-4o">Enter API key to load models</option>';
+        return;
+      }
+      
       refreshModelsBtn.classList.add('loading');
       try {
-        const res = await fetch('/api/models');
+        const res = await fetch('/api/models?api_key=' + encodeURIComponent(apiKey));
         const data = await res.json();
         
         if (data.error) {
