@@ -146,6 +146,18 @@
       border-color: var(--accent);
     }
 
+    .btn-new {
+      background: var(--accent);
+      color: white;
+      border-color: var(--accent);
+    }
+
+    .btn-new:hover {
+      background: var(--accent-hover);
+      border-color: var(--accent-hover);
+      color: white;
+    }
+
     /* Response Browser Modal */
     .modal-overlay {
       position: fixed;
@@ -778,8 +790,9 @@
       <div class="config-group">
         <label>Response / Conversation ID</label>
         <div class="response-id-row">
-          <input type="text" id="responseId" placeholder="resp_... or conv_..." autocomplete="off">
-          <button class="btn-browse" id="loadHistory" title="Load conversation history">📜</button>
+          <input type="text" id="responseId" placeholder="(empty = new conversation)" autocomplete="off">
+          <button class="btn-browse btn-new" id="newConversation" title="Start new conversation">✨</button>
+          <button class="btn-browse" id="loadHistory" title="Load history">📜</button>
           <button class="btn-browse" id="convertToConv" title="Convert to Conversation">🔄</button>
           <button class="btn-browse" id="browseResponses" title="Browse saved">📋</button>
         </div>
@@ -949,16 +962,12 @@
         return;
       }
 
-      if (!responseId) {
-        showToast('Please enter a Response ID', 'error');
-        responseIdInput.focus();
-        return;
-      }
-
       if (!message && pendingImages.length === 0) {
         showToast('Please enter a message or attach images', 'error');
         return;
       }
+
+      // Note: responseId can be empty for new conversations
 
       if (isLoading) return;
       isLoading = true;
@@ -1252,6 +1261,29 @@
 
     // Track if we're using a conversation ID
     let usingConversation = false;
+
+    // New Conversation button
+    document.getElementById('newConversation').addEventListener('click', () => {
+      responseIdInput.value = '';
+      usingConversation = false;
+      chatContainer.innerHTML = '';
+      emptyState.style.display = 'none';
+      
+      // Add a welcome message
+      const welcome = document.createElement('div');
+      welcome.className = 'message assistant';
+      welcome.innerHTML = `
+        <div class="message-avatar">🤖</div>
+        <div class="message-content">
+          <div class="message-role">assistant</div>
+          <div class="message-text">New conversation started! Type your message below.</div>
+        </div>
+      `;
+      chatContainer.appendChild(welcome);
+      
+      messageInput.focus();
+      showToast('New conversation - just type and send!', 'success');
+    });
     
     // Convert to Conversation button
     const convertToConvBtn = document.getElementById('convertToConv');

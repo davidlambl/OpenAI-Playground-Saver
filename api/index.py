@@ -340,9 +340,6 @@ def send_message():
         if not api_key:
             return jsonify({"error": "API key is required"}), 400
         
-        if not response_id:
-            return jsonify({"error": "Response ID is required"}), 400
-        
         if not message and not request.files.getlist("images"):
             return jsonify({"error": "Message or images required"}), 400
         
@@ -357,9 +354,12 @@ def send_message():
         
         params = {
             "model": model,
-            "previous_response_id": response_id,
             "input": input_payload,
         }
+        
+        # Only add previous_response_id if continuing a conversation
+        if response_id:
+            params["previous_response_id"] = response_id
         
         if reasoning_effort:
             params["reasoning"] = {"effort": reasoning_effort}
