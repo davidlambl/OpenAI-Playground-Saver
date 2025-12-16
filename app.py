@@ -8,17 +8,12 @@ Then open: http://localhost:5050
 import base64
 import mimetypes
 import os
-import json
-from datetime import datetime
 from pathlib import Path
-from flask import Flask, render_template, request, jsonify, session
+from flask import Flask, render_template, request, jsonify
 from openai import OpenAI
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
-
-# Store conversation history in memory (per session)
-conversations: dict[str, list[dict]] = {}
 
 
 def get_client(api_key: str) -> OpenAI:
@@ -353,16 +348,11 @@ def send_message():
         
         # Process uploaded images
         images = []
-        image_previews = []
         for file in request.files.getlist("images"):
             if file and file.filename:
                 data = file.read()
                 encoded, mime_type = encode_image_bytes(data, file.filename)
                 images.append({"data": encoded, "mime_type": mime_type})
-                image_previews.append({
-                    "name": file.filename,
-                    "preview": f"data:{mime_type};base64,{encoded[:100]}..."
-                })
         
         # Build input
         input_payload = build_input(message, images)
@@ -392,23 +382,6 @@ def send_message():
                     if content.type == "output_text":
                         assistant_text += content.text
         
-        # Store in conversation history
-        conv_key = response_id
-        if conv_key not in conversations:
-            conversations[conv_key] = []
-        
-        conversations[conv_key].append({
-            "role": "user",
-            "content": message,
-            "images": len(images),
-            "timestamp": datetime.now().isoformat(),
-        })
-        conversations[conv_key].append({
-            "role": "assistant", 
-            "content": assistant_text,
-            "timestamp": datetime.now().isoformat(),
-        })
-        
         return jsonify({
             "success": True,
             "response": assistant_text,
@@ -418,13 +391,6 @@ def send_message():
         
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-
-@app.route("/api/history/<response_id>")
-def get_history(response_id: str):
-    """Get conversation history for a response ID."""
-    history = conversations.get(response_id, [])
-    return jsonify({"history": history})
 
 
 if __name__ == "__main__":
