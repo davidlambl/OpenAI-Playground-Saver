@@ -123,12 +123,15 @@ def get_response_history(response_id: str):
         response = client.responses.retrieve(response_id)
         
         # Get input items (conversation history)
-        # Note: order parameter ensures chronological order (oldest first)
-        input_items = client.responses.input_items.list(response_id, order="asc")
+        input_items = client.responses.input_items.list(response_id)
         
         # Build conversation history
+        # API returns newest first, so reverse to get chronological order
+        items_list = list(input_items.data)
+        items_list.reverse()
+        
         messages = []
-        for item in input_items.data:
+        for item in items_list:
             if item.type == "message":
                 role = item.role if hasattr(item, 'role') else "unknown"
                 content = ""
@@ -304,11 +307,14 @@ def get_conversation_items(conv_id: str):
     
     try:
         client = get_client(api_key)
-        # order="asc" ensures chronological order (oldest first)
-        items = client.conversations.items.list(conv_id, order="asc")
+        items = client.conversations.items.list(conv_id)
+        
+        # API returns newest first, so reverse to get chronological order
+        items_list = list(items.data)
+        items_list.reverse()
         
         messages = []
-        for item in items.data:
+        for item in items_list:
             if item.type == "message":
                 role = item.role if hasattr(item, 'role') else "unknown"
                 content = ""
