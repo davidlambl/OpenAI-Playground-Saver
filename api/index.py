@@ -124,8 +124,9 @@ def get_response_history(response_id: str):
         input_items = client.responses.input_items.list(response_id)
         
         # Build conversation history
+        # Note: API returns items in reverse chronological order, so we reverse them
         messages = []
-        for item in input_items.data:
+        for item in reversed(input_items.data):
             if item.type == "message":
                 role = item.role if hasattr(item, 'role') else "unknown"
                 content = ""
@@ -303,8 +304,9 @@ def get_conversation_items(conv_id: str):
         client = get_client(api_key)
         items = client.conversations.items.list(conv_id)
         
+        # Reverse to get chronological order
         messages = []
-        for item in items.data:
+        for item in reversed(items.data):
             if item.type == "message":
                 role = item.role if hasattr(item, 'role') else "unknown"
                 content = ""
